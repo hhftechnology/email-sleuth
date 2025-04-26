@@ -1,0 +1,124 @@
+# Configuration file for Email Sleuth
+# Settings here can be overridden by command-line arguments.
+
+# Settings related to network operations (HTTP requests)
+[network]
+# Timeout for individual HTTP requests (e.g., fetching website pages) in seconds.
+# Default: 10
+request_timeout = 10
+
+# Minimum time to sleep between consecutive HTTP requests to the same domain (seconds).
+# Helps avoid rate limiting. Use fractional seconds for finer control.
+# Default: 0.1
+min_sleep = 0.1
+
+# Maximum time to sleep between consecutive HTTP requests to the same domain (seconds).
+# Introduces randomness to avoid predictable patterns.
+# Default: 0.5
+max_sleep = 0.5
+
+# User-Agent string to use when making HTTP requests.
+# Default: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+
+# Settings related to DNS lookups (e.g., finding MX records)
+[dns]
+# Timeout for DNS resolution queries in seconds.
+# Default: 5
+dns_timeout = 5
+
+# List of DNS servers to use for lookups. If empty or omitted, system defaults may be used,
+# but explicitly listing reliable public DNS servers is recommended.
+# Default: ["8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1"]
+dns_servers = [
+    "8.8.8.8", # Google Public DNS 1
+    "8.8.4.4", # Google Public DNS 2
+    "1.1.1.1", # Cloudflare DNS 1
+    "1.0.0.1", # Cloudflare DNS 2
+]
+
+# Settings related to SMTP email verification
+[smtp]
+# Timeout for establishing SMTP connections and for individual SMTP commands (like HELO, MAIL FROM, RCPT TO) in seconds.
+# Default: 5
+smtp_timeout = 5
+
+# The sender email address used in the 'MAIL FROM:' SMTP command during verification.
+# Some servers may reject connections or treat probes differently based on this.
+# Using a plausible (but often non-existent) email from a common domain is typical.
+# Default: "verify-probe@example.com"
+smtp_sender_email = "verify-probe@example.com"
+
+# Maximum number of times to retry SMTP verification if the result is inconclusive
+# (e.g., due to temporary errors or greylisting).
+# Default: 2
+max_verification_attempts = 2
+
+# Settings related to web scraping (if implemented and enabled)
+[scraping]
+# List of common page paths (relative to the domain root) to scrape for email addresses.
+# Default: Includes /contact, /about, /team, etc.
+common_pages = [
+    "/contact",
+    "/about-us",
+    "/team",
+    "/people",
+    # Add more specific paths if known for certain industries/sites
+]
+
+# List of email prefixes considered "generic" (e.g., info@, support@).
+# Emails starting with these prefixes are typically given lower confidence unless specifically verified.
+# Default: Includes info, contact, support, sales, admin, etc.
+generic_email_prefixes = [
+    "info",
+    "contact",
+    "support",
+    "sales",
+    "admin",
+    "hello",
+    "help",
+    "office",
+    "press",
+    "media",
+    "marketing",
+    "jobs",
+    "careers",
+    "privacy",
+    "legal",
+    "webmaster",
+    # Add or remove based on your needs
+]
+
+# Settings controlling the verification logic and thresholds
+[verification]
+# The minimum confidence score (0-10) required for an email to be selected as the primary result ("email" field).
+# Scores are influenced by pattern likelihood, name matching, and SMTP verification results.
+# Default: 4
+confidence_threshold = 4
+
+# The minimum confidence score (0-10) required for a *generic* email (e.g., info@)
+# to be selected as the primary result. Usually set higher than the normal threshold
+# to prefer specific user emails over generic ones.
+# Default: 7 (and must be >= confidence_threshold)
+generic_confidence_threshold = 7
+
+# The maximum number of alternative email candidates (found_emails array) to include
+# in the output JSON, sorted by confidence.
+# Default: 5
+max_alternatives = 5
+
+# Default maximum number of concurrent tasks (processing contacts or performing network operations).
+# Can be overridden by the --concurrency CLI argument.
+# Default: 8
+max_concurrency = 8
+
+# Settings for default input and output file paths
+# These are typically overridden by the -i and -o CLI arguments.
+[input_output]
+# Default path to the input JSON file.
+# Default: "input.json"
+input_file = "input.json"
+
+# Default path for the output JSON results file.
+# Default: "results.json"
+output_file = "results.json"
