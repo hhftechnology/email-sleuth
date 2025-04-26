@@ -1,0 +1,153 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: email-sleuth
+
+jobs:
+  build-release:
+    name: Build & Release ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_suffix: ""
+            archive_suffix: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_suffix: ""
+            archive_suffix: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            binary_suffix: ""
+            archive_suffix: zip
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            binary_suffix: ""
+            archive_suffix: zip
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary_suffix: .exe
+            archive_suffix: zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Rust Dependencies & Setup Toolchain
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install Linux dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install cross-compilation tools for aarch64 Linux
+        if: matrix.target == 'aarch64-unknown-linux-gnu' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "[target.aarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
+          echo "linker = \"aarch64-linux-gnu-gcc\"" >> ~/.cargo/config.toml
+
+      - name: Build binary
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+
+      - name: Determine Paths and Names
+        id: paths
+        shell: bash
+        run: |
+          TARGET_DIR="target/${{ matrix.target }}/release"
+          BINARY_FILENAME="${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}"
+          BINARY_PATH="$TARGET_DIR/$BINARY_FILENAME"
+
+          echo "Checking for binary at: $BINARY_PATH"
+          if [[ ! -f "$BINARY_PATH" ]]; then
+            echo "::error::Binary not found at $BINARY_PATH"
+            echo "Listing contents of $TARGET_DIR:"
+            ls -l "$TARGET_DIR" || echo "Directory $TARGET_DIR not found or cannot be listed."
+            exit 1
+          fi
+          echo "Binary found: $BINARY_FILENAME"
+
+          echo "binary_path=${BINARY_PATH}" >> $GITHUB_OUTPUT
+          echo "binary_filename=${BINARY_FILENAME}" >> $GITHUB_OUTPUT
+
+          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_suffix }}"
+          echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+
+          echo "Determined Binary Path: ${BINARY_PATH}"
+          echo "Determined Binary Filename: ${BINARY_FILENAME}"
+          echo "Determined Archive Name: ${ARCHIVE_NAME}"
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Archive Suffix: ${{ matrix.archive_suffix }}"
+
+
+      - name: Archive release artifact (tar.gz)
+        if: matrix.archive_suffix == 'tar.gz'
+        shell: bash
+        run: |
+          echo "Archiving (tar.gz) ${{ steps.paths.outputs.binary_filename }} from target/${{ matrix.target }}/release into ${{ steps.paths.outputs.archive_name }}"
+          tar czf ${{ steps.paths.outputs.archive_name }} -C target/${{ matrix.target }}/release ${{ steps.paths.outputs.binary_filename }}
+          echo "Archive contents (tar.gz):"
+          tar tzf ${{ steps.paths.outputs.archive_name }}
+          ls -lh ${{ steps.paths.outputs.archive_name }} # Verify archive exists and has size
+
+      - name: Archive release artifact (zip)
+        if: matrix.archive_suffix == 'zip'
+        shell: bash
+        run: |
+          echo "Archiving (zip) ${{ steps.paths.outputs.binary_filename }} from target/${{ matrix.target }}/release into ${{ steps.paths.outputs.archive_name }}"
+          TARGET_DIR="target/${{ matrix.target }}/release"
+          BINARY_FILENAME="${{ steps.paths.outputs.binary_filename }}"
+          ARCHIVE_NAME="${{ steps.paths.outputs.archive_name }}"
+
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "Using PowerShell Compress-Archive on Windows"
+            # Need to ensure paths are handled correctly for PowerShell command within bash step
+            powershell Compress-Archive -Path "$(cygpath -w "${TARGET_DIR}/${BINARY_FILENAME}")" -DestinationPath "$(cygpath -w "$ARCHIVE_NAME")" -Force
+          else # macOS zip case
+            echo "Using zip on macOS"
+            pushd "$TARGET_DIR"
+            zip ../../../"$ARCHIVE_NAME" "$BINARY_FILENAME"
+            popd
+          fi
+
+          echo "Verifying zip archive exists:"
+          ls -lh "$ARCHIVE_NAME"
+          # Simple verification for zip (list contents) might need unzip tool installed separately on some runners if not default
+          if command -v unzip &> /dev/null; then
+             echo "Archive contents (zip):"
+             unzip -l "$ARCHIVE_NAME"
+          elif command -v 7z &> /dev/null; then
+            echo "Archive contents (zip, using 7z):"
+            7z l "$ARCHIVE_NAME"
+          else
+             echo "Cannot list zip contents (unzip or 7z command not found)."
+          fi
+
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.paths.outputs.archive_name }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
