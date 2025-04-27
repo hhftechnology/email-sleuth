@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Sleuth</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .form-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .result-container {
+            margin-top: 2rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .spinner-border {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h1 class="mb-4">Email Sleuth</h1>
+            
+            <ul class="nav nav-tabs" id="myTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="single-tab" data-bs-toggle="tab" data-bs-target="#single" type="button" role="tab" aria-controls="single" aria-selected="true">Single Contact</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="batch-tab" data-bs-toggle="tab" data-bs-target="#batch" type="button" role="tab" aria-controls="batch" aria-selected="false">Batch Processing</button>
+                </li>
+            </ul>
+            
+            <div class="tab-content p-3 border border-top-0 rounded-bottom" id="myTabContent">
+                <!-- Single Contact Form -->
+                <div class="tab-pane fade show active" id="single" role="tabpanel" aria-labelledby="single-tab">
+                    <form id="singleForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="firstName" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="firstName" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="lastName" class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="lastName" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="domain" class="form-label">Company Domain or Website</label>
+                            <input type="text" class="form-control" id="domain" placeholder="example.com or https://example.com" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="spinner-border spinner-border-sm" id="singleSpinner" role="status" aria-hidden="true"></span>
+                            Verify Email
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Batch Processing Form -->
+                <div class="tab-pane fade" id="batch" role="tabpanel" aria-labelledby="batch-tab">
+                    <form id="batchForm">
+                        <div class="mb-3">
+                            <label for="batchData" class="form-label">JSON Input (Array of Contacts)</label>
+                            <textarea class="form-control" id="batchData" rows="10" required placeholder='[
+  {
+    "first_name": "John",
+    "last_name": "Doe",
+    "domain": "example.com"
+  },
+  {
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "domain": "anothercompany.com"
+  }
+]'></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="spinner-border spinner-border-sm" id="batchSpinner" role="status" aria-hidden="true"></span>
+                            Process Batch
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Results Section -->
+            <div class="result-container">
+                <h3>Results</h3>
+                <div id="results" class="border p-3 rounded bg-light">
+                    <p class="text-muted">Results will appear here...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const singleForm = document.getElementById('singleForm');
+            const batchForm = document.getElementById('batchForm');
+            const resultsDiv = document.getElementById('results');
+            const singleSpinner = document.getElementById('singleSpinner');
+            const batchSpinner = document.getElementById('batchSpinner');
+            
+            // Single contact form submission
+            singleForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const firstName = document.getElementById('firstName').value;
+                const lastName = document.getElementById('lastName').value;
+                const domain = document.getElementById('domain').value;
+                
+                const data = {
+                    first_name: firstName,
+                    last_name: lastName,
+                    domain: domain
+                };
+                
+                singleSpinner.style.display = 'inline-block';
+                
+                try {
+                    const response = await fetch('/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        displayResults(result.result);
+                    } else {
+                        resultsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                } finally {
+                    singleSpinner.style.display = 'none';
+                }
+            });
+            
+            // Batch form submission
+            batchForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                let contacts;
+                try {
+                    contacts = JSON.parse(document.getElementById('batchData').value);
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="alert alert-danger">Invalid JSON: ${error.message}</div>`;
+                    return;
+                }
+                
+                const data = {
+                    contacts: contacts
+                };
+                
+                batchSpinner.style.display = 'inline-block';
+                
+                try {
+                    const response = await fetch('/batch', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        displayBatchResults(result.results);
+                    } else {
+                        resultsDiv.innerHTML = `<div class="alert alert-danger">${result.message}</div>`;
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+                } finally {
+                    batchSpinner.style.display = 'none';
+                }
+            });
+            
+            // Display single result
+            function displayResults(result) {
+                let html = '<div class="card mb-3">';
+                html += '<div class="card-header bg-primary text-white">Contact Information</div>';
+                html += '<div class="card-body">';
+                
+                const name = `${result.contact_input.first_name || ''} ${result.contact_input.last_name || ''}`.trim();
+                html += `<h5 class="card-title">${name || 'Unknown'}</h5>`;
+                html += `<p class="card-text">Domain: ${result.contact_input.domain || 'N/A'}</p>`;
+                
+                if (result.email) {
+                    html += `<div class="alert alert-success">
+                        <strong>Email Found:</strong> ${result.email}<br>
+                        <strong>Confidence:</strong> ${result.email_confidence}/10<br>
+                        <strong>Methods:</strong> ${result.email_verification_method || 'N/A'}
+                    </div>`;
+                    
+                    if (result.email_alternatives && result.email_alternatives.length > 0) {
+                        html += '<div class="mt-3"><strong>Alternative Emails:</strong><ul>';
+                        result.email_alternatives.forEach(email => {
+                            html += `<li>${email}</li>`;
+                        });
+                        html += '</ul></div>';
+                    }
+                } else if (result.email_finding_skipped) {
+                    html += `<div class="alert alert-warning">
+                        <strong>Skipped:</strong> ${result.email_finding_reason || 'Unknown reason'}
+                    </div>`;
+                } else if (result.email_verification_failed) {
+                    html += `<div class="alert alert-danger">
+                        <strong>Verification Failed:</strong> No high-confidence email found
+                    </div>`;
+                } else if (result.email_finding_error) {
+                    html += `<div class="alert alert-danger">
+                        <strong>Error:</strong> ${result.email_finding_error}
+                    </div>`;
+                } else {
+                    html += `<div class="alert alert-warning">
+                        <strong>No Email Found</strong>
+                    </div>`;
+                }
+                
+                html += '</div></div>';
+                
+                resultsDiv.innerHTML = html;
+            }
+            
+            // Display batch results
+            function displayBatchResults(results) {
+                if (!results || results.length === 0) {
+                    resultsDiv.innerHTML = '<div class="alert alert-warning">No results returned</div>';
+                    return;
+                }
+                
+                let html = `<p>Processed ${results.length} contacts:</p>`;
+                
+                results.forEach((result, index) => {
+                    const name = `${result.contact_input.first_name || ''} ${result.contact_input.last_name || ''}`.trim();
+                    
+                    html += `<div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>${name || 'Unknown'} (${result.contact_input.domain || 'N/A'})</span>
+                            <span class="badge ${result.email ? 'bg-success' : 'bg-danger'}">${result.email ? 'Found' : 'Not Found'}</span>
+                        </div>
+                        <div class="card-body">`;
+                    
+                    if (result.email) {
+                        html += `<p><strong>Email:</strong> ${result.email}</p>
+                            <p><strong>Confidence:</strong> ${result.email_confidence}/10</p>`;
+                    } else if (result.email_finding_skipped) {
+                        html += `<p><strong>Skipped:</strong> ${result.email_finding_reason || 'Unknown reason'}</p>`;
+                    } else if (result.email_verification_failed) {
+                        html += `<p><strong>Verification Failed:</strong> No high-confidence email found</p>`;
+                    } else if (result.email_finding_error) {
+                        html += `<p><strong>Error:</strong> ${result.email_finding_error}</p>`;
+                    }
+                    
+                    html += '</div></div>';
+                });
+                
+                resultsDiv.innerHTML = html;
+            }
+        });
+    </script>
+</body>
+</html>
